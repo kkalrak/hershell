@@ -25,13 +25,14 @@ body {
   user-select: none;
 }
 #list li:hover { background: #2a2d2e; }
-#list li.active { background: #37373d; color: #fff; }#list .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #4caf50; }
+#list li.active { background: #37373d; color: #fff; }
+#list .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 #list .dot.working { background: #e5c07b; }
 #list .dot.blocked { background: #e06c75; }
 #list .dot.done { background: #61afef; }
 #list .dot.idle { background: #4caf50; }
 #list .dot.exited { background: #666; }
-#list .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; }
+#list .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #list .close { opacity: 0; border: none; background: none; color: #aaa; cursor: pointer; font-size: 14px; padding: 0 2px; }
 #list li:hover .close { opacity: 1; }
 #list .close:hover { color: #fff; }

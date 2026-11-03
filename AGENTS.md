@@ -92,6 +92,11 @@ hershell/
   - **알려진 문제:** 사용자 PC에서는 pwsh가 PATH의 실제 파일로 잡히지 않아서 지금은 `powershell.exe`로 실행됩니다. pwsh 7을 쓰려면 경로를 직접 지정하거나 `where.exe pwsh`로 찾게 고쳐야 합니다. 아직 사용자가 요청하지 않았습니다.
 - 실행 인자는 `-NoLogo`, 시작 폴더는 사용자 홈 폴더, 환경 변수는 `process.env`를 그대로 넘깁니다.
 
+## 6-0. 단일 실행
+- 앱은 **한 번만 실행됩니다** (사용자 요구사항). `main.ts`의 `app.requestSingleInstanceLock()`을 씁니다. 이미 켜져 있을 때 다시 실행하면 새 창을 띄우지 않고 기존 창을 앞으로 가져오고, 최소화되어 있으면 원래 크기로 되돌립니다(`second-instance` 이벤트).
+- 이유: 두 개가 동시에 켜지면 사이드바 저장 데이터를 서로 덮어쓰고, Chromium 저장소 잠금이 충돌합니다.
+- 잠금은 userData 폴더 기준입니다. `HERSHELL_USER_DATA`를 쓰는 테스트는 실제 앱이 켜져 있어도 따로 실행됩니다. 그래서 `setPath`가 잠금 요청보다 먼저 실행되어야 합니다.
+
 ## 6-1. 사이드바 저장과 복원 (`layout.ts`, `renderer.ts`의 `persist`, `start`)
 
 - **사이드바 제목은 항상 현재 폴더 이름입니다** (사용자 요구사항). 예를 들어 `C:\work\hershell`이면 `hershell`, 드라이브 루트이면 `C:\`로 표시합니다. 폴더를 알기 전에는 `…`로 표시하고, 마우스를 올리면 전체 경로가 보입니다 (`folderName`, `setCwd`). 사용자가 이름을 직접 바꾸는 기능은 없습니다.
@@ -99,7 +104,7 @@ hershell/
 - 작업 폴더 추적: 상태 감지 루프(0.3초)가 마지막 줄의 PowerShell 프롬프트 `PS <경로>>`에서 경로를 읽습니다. 경로가 바뀌면 저장합니다. 별도 처리 비용은 없습니다.
   - 프롬프트 모양을 바꾸면(oh-my-posh 등) 폴더를 추적하지 못합니다. 이 경우 홈 폴더에서 시작합니다.
   - 메인 프로세스가 `validDir()`로 폴더가 실제로 있는지 확인합니다. 없으면 홈 폴더에서 시작합니다.
-- 저장 위치: `localStorage`의 키 `hershell.layout.v2` (Electron userData 폴더 `%APPDATA%\hershell`에 저장됨). 없으면 이전 키 `hershe.layout.v2`, `hershe.layout.v1`에서 cwds를 읽습니다.
+- 저장 위치: `localStorage`의 키 `hershell.layout.v2` (Electron userData 폴더 `%APPDATA%\hershell`에 저장됨). 예전 이름(hershe) 시절 데이터를 옮기던 코드는 옮기기가 끝나서 삭제했습니다.
 - 저장 시점: 항목 전환(`activate`), 닫기(`removeItem`), 폴더 변경 감지
 - 앱을 켜면 저장된 항목마다 **빈 셸을 새로 엽니다.** 출력 내용이나 실행 중이던 프로그램은 복원하지 않습니다.
 - 복원하는 동안에는 `restoring` 플래그로 저장을 막고, 마지막에 한 번만 저장합니다.
@@ -160,6 +165,8 @@ npx tsc -p .                            # 타입 검사
 - Electron 실행 파일이 다운로드되지 않습니다. `node node_modules\electron\install.js`를 직접 실행해야 합니다. `node_modules\electron\dist\electron.exe`가 있으면 정상입니다.
 - esbuild는 설치 스크립트 없이도 동작하는 것을 확인했습니다.
 
+**아이콘:** `assets/icon.ico`, `assets/icon.png` (어두운 둥근 사각형에 초록 `>_`와 흰 `hs`). `tools/make-icon.ps1`이 System.Drawing으로 그려서 만들고, 16~256px 크기를 하나의 ICO에 담습니다. 디자인을 바꾸려면 스크립트를 고친 뒤 `powershell -ExecutionPolicy Bypass -File tools\make-icon.ps1`을 실행하세요. 창 아이콘은 `main.ts`의 `BrowserWindow({ icon })`에서, 바로가기 아이콘은 `.lnk`의 IconLocation에서 지정합니다.
+
 **바탕화면 바로가기:** `C:\Users\gello\OneDrive\Desktop\hershell.lnk`
 - 대상: `node_modules\electron\dist\electron.exe "C:\work\hershell"`
 - 빌드된 `dist/`를 그대로 실행합니다. **코드를 고친 뒤에는 `npm run build`를 해야 바로가기에 반영됩니다.**
@@ -193,7 +200,7 @@ npm run test:ui -- <스크린샷 저장 폴더>      # 빌드 후 UI 자동 조�
 1. 실제 claude와 codex에서 🔴 감지가 맞는지 확인하고 `BLOCKED_RE`를 조정
 2. 기존 PowerShell 창이나 Windows Terminal과 속도 비교 측정
 3. pwsh 7 실행 지원 (`findShell` 수정)
-4. 앱 아이콘 지정, 실행 파일(.exe) 패키징 (예: electron-builder)
+4. 실행 파일(.exe) 패키징 (예: electron-builder, 아이콘은 `assets/icon.ico` 사용)
 
 ## 14. 작업 규칙
 

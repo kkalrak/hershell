@@ -17,7 +17,6 @@ const TERM_OPTIONS = {
   fontSize: 14,
   scrollback: 10000,
   cursorBlink: true,
-  allowProposedApi: true,
   theme: { background: '#1e1e1e' },
 };
 

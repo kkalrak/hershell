@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, ipcMain, Menu } from 'electron';
 import * as pty from '@lydell/node-pty';
-import { cpSync, existsSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
@@ -102,6 +102,7 @@ function createWindow() {
     height: 800,
     backgroundColor: '#1e1e1e',
     title: 'hershell',
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'), // made by tools/make-icon.ps1
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -118,24 +119,22 @@ function createWindow() {
 
 // Tests use a separate profile so they never overwrite the user's saved sidebar.
 if (process.env.HERSHELL_USER_DATA) app.setPath('userData', process.env.HERSHELL_USER_DATA);
-else migrateFromOldName();
 
-/**
- * The app was renamed hershe -> hershell, which moves Electron's userData folder.
- * Copy the old Local Storage (saved sidebar) once so the user's layout survives.
- */
-function migrateFromOldName() {
-  try {
-    const oldStore = path.join(app.getPath('appData'), 'hershe', 'Local Storage');
-    const newStore = path.join(app.getPath('userData'), 'Local Storage');
-    if (existsSync(oldStore) && !existsSync(newStore)) cpSync(oldStore, newStore, { recursive: true });
-  } catch (err) {
-    console.error('settings migration failed', err);
-  }
+// Only one instance per profile: two instances would fight over the saved sidebar
+// and Chromium's storage lock. A second launch just brings the existing window forward.
+// (The lock is tied to userData, so tests with HERSHELL_USER_DATA don't clash with the real app.)
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+  Menu.setApplicationMenu(null);
+  app.whenReady().then(createWindow);
 }
-
-Menu.setApplicationMenu(null);
-app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
   for (const s of sessions.values()) s.proc.kill();
