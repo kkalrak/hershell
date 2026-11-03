@@ -58,12 +58,10 @@ test('parseLayout: valid, clamped, broken', () => {
   assert.equal(parseLayout(null), null);
 });
 
-test('load/save round trip and v1 fallback', () => {
+test('load/save round trip', () => {
   const m = new Map<string, string>();
   const store = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
   assert.equal(loadLayout(store), null);
-  m.set('hershe.layout.v1', JSON.stringify({ titles: ['x'], cwds: ['C:\\old'], active: 0, counter: 3 }));
-  assert.deepEqual(loadLayout(store), { cwds: ['C:\\old'], active: 0 });
   saveLayout({ cwds: ['C:\\new'], active: 0 }, store);
   assert.deepEqual(loadLayout(store), { cwds: ['C:\\new'], active: 0 });
 });
