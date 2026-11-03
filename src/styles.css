@@ -25,9 +25,7 @@ body {
   user-select: none;
 }
 #list li:hover { background: #2a2d2e; }
-#list li.active { background: #37373d; color: #fff; }
-#list li.dragging { opacity: 0.4; }
-#list .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #4caf50; }
+#list li.active { background: #37373d; color: #fff; }#list .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #4caf50; }
 #list .dot.working { background: #e5c07b; }
 #list .dot.blocked { background: #e06c75; }
 #list .dot.done { background: #61afef; }

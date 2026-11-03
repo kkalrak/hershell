@@ -4,7 +4,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import './styles.css';
 import type { PtyApi } from './preload';
-import { detect, folderName, STATUS_MS, TAIL_LINES, type Status } from './status';
+import { compareItems, detect, folderName, STATUS_MS, TAIL_LINES, type Status } from './status';
 import { loadLayout, saveLayout as storeLayout } from './layout';
 
 declare global {
@@ -72,6 +72,15 @@ function setCwd(it: Item, cwd: string) {
   it.li.title = cwd; // full path on hover
 }
 
+/** Keep the sidebar sorted by folder name. Touches the DOM only when the order actually changes. */
+function sortList() {
+  const current = ordered();
+  const sorted = [...current].sort(compareItems);
+  if (sorted.every((it, i) => it === current[i])) return;
+  for (const it of sorted) listEl.appendChild(it.li);
+  persist();
+}
+
 function setStatus(it: Item, s: Status) {
   if (s === it.status) return;
   it.status = s;
@@ -84,14 +93,13 @@ setInterval(() => {
   for (const it of items.values()) {
     const d = detect(tailLines(it.term, TAIL_LINES), now - it.lastOutput, it.exited);
     setStatus(it, d.status);
-    if (d.cwd && d.cwd !== it.cwd) { setCwd(it, d.cwd); persist(); }
+    if (d.cwd && d.cwd !== it.cwd) { setCwd(it, d.cwd); persist(); sortList(); }
   }
 }, STATUS_MS);
 
 // ---------- DOM ----------
 function createRow(): { li: HTMLLIElement; dot: HTMLSpanElement; title: HTMLSpanElement; close: HTMLButtonElement } {
   const li = document.createElement('li');
-  li.draggable = true;
   const dot = document.createElement('span');
   dot.className = 'dot idle';
   const title = document.createElement('span');
@@ -147,6 +155,7 @@ async function addShell(cwd = '') {
   const it: Item = { id, term, fit, el, li, dot, title, cwd: '', status: 'idle', lastOutput: 0, exited: false };
   setCwd(it, cwd);
   items.set(id, it);
+  sortList();
 
   term.onData((d) => { if (!it.exited) api.write(id, d); });
   term.onResize(({ cols, rows }) => api.resize(id, cols, rows));
@@ -242,40 +251,6 @@ new ResizeObserver(() => {
 };
 
 document.getElementById('add')!.addEventListener('click', () => addShell());
-
-// ---------- drag to reorder sidebar rows ----------
-// The DOM order of #list is the source of truth (ordered() / persist() read it).
-let dragging: HTMLLIElement | null = null;
-
-listEl.addEventListener('dragstart', (e) => {
-  dragging = (e.target as HTMLElement).closest('li');
-  if (!dragging) return;
-  e.dataTransfer?.setData('text/plain', '');
-  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-  dragging.classList.add('dragging');
-});
-
-listEl.addEventListener('dragover', (e) => {
-  if (!dragging) return;
-  e.preventDefault();
-  // Insert before the first row whose middle is below the pointer.
-  const rows = ([...listEl.children] as HTMLLIElement[]).filter((li) => li !== dragging);
-  const before = rows.find((li) => {
-    const r = li.getBoundingClientRect();
-    return e.clientY < r.top + r.height / 2;
-  }) ?? null;
-  if (dragging.nextElementSibling !== before) listEl.insertBefore(dragging, before);
-});
-
-listEl.addEventListener('drop', (e) => e.preventDefault());
-
-listEl.addEventListener('dragend', () => {
-  dragging?.classList.remove('dragging');
-  dragging = null;
-  persist();
-  active?.term.focus();
-});
-
 // ---------- start ----------
 async function start() {
   const layout = loadLayout();

@@ -36,6 +36,18 @@ export function detect(lines: string[], msSinceOutput: number, exited: boolean):
   return { status: 'done' };
 }
 
+const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
+
+/**
+ * Sidebar sort order: 가나다 / alphabetical by folder name (Korean collation, numbers in numeric order).
+ * Ties fall back to the full path, then to creation order, so the order is stable.
+ */
+export function compareItems(a: { cwd: string; id: number }, b: { cwd: string; id: number }): number {
+  return collator.compare(folderName(a.cwd), folderName(b.cwd))
+    || collator.compare(a.cwd, b.cwd)
+    || a.id - b.id;
+}
+
 /** Sidebar title for a folder: last path segment, or the drive root itself ("C:\"). */
 export function folderName(cwd: string): string {
   if (!cwd) return '…';
