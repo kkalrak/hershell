@@ -12,6 +12,7 @@ import os from 'node:os';
 const profile = path.join(os.tmpdir(), 'hershell-test-profile');
 rmSync(profile, { recursive: true, force: true });
 const env = { ...process.env, HERSHELL_USER_DATA: profile };
+const hangulDir = path.join(os.tmpdir(), 'hershell-test-dirs', '가나다');
 
 const app = await electron.launch({ args: ['.'], env });
 const page = await app.firstWindow();
@@ -70,43 +71,40 @@ await page.click('#list li:nth-child(1)');
 await wait(500);
 await shot('switched-back');
 
-// 7. title follows the folder: cd in item 2, its title should become "work"
+// Rows are auto-sorted by folder name, so find them by title, not by position.
+const byTitle = (t) => page.locator('#list li').filter({ has: page.locator('.title', { hasText: new RegExp(`^${t.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}$`) }) }).first();
+const titles = () => page.$$eval('#list li .title', (t) => t.map((x) => x.textContent).join(', '));
+
+// 7. title follows the folder and the list re-sorts live (가나다 / alphabetical)
 await page.click('#list li:nth-child(2)');
 await run('cd C:\\work');
 await wait(1000);
-console.log('after cd C:\\work in item 2:', await status());
+console.log('after cd C:\\work :', await titles());
 await run('cd C:\\');
 await wait(1000);
-console.log('after cd C:\\ in item 2:', await status());
+console.log('after cd C:\\     :', await titles());
 
-// 8. keyboard shortcut Ctrl+Shift+T
+// 8. keyboard shortcut Ctrl+Shift+T, then move the new shell around
 await page.keyboard.press('Control+Shift+T');
 await wait(1500);
-console.log('after Ctrl+Shift+T:', await status());
+console.log('after Ctrl+Shift+T:', await titles());
+await run(`New-Item -ItemType Directory -Force '${hangulDir}' | Out-Null; cd '${hangulDir}'`);
+await wait(1200);
+console.log('after cd 가나다    :', await titles());
+await run("cd 'C:\\Program Files'");
+await wait(1000);
+console.log('after cd Program Files:', await titles());
+await shot('sorted');
 
-// 9. close the third item
-await page.hover('#list li:nth-child(3)');
-await page.click('#list li:nth-child(3) .close');
+// 9. close the "C:\" item
+await byTitle('C:\\').hover();
+await byTitle('C:\\').locator('.close').click();
 await wait(500);
-console.log('after close:', await status());
+console.log('after close C:\\  :', await status());
 await shot('final');
 
-// 9-1. drag to reorder: add a third shell in C:\work, drag it to the top
-await page.keyboard.press('Control+Shift+T');
-await wait(1500);
-await run('cd C:\\work');
-await wait(1000);
-console.log('before drag:', await status());
-await page.dragAndDrop('#list li:nth-child(3)', '#list li:nth-child(1)', { targetPosition: { x: 20, y: 3 } });
-await wait(400);
-console.log('after drag to top:', await status());
-await page.dragAndDrop('#list li:nth-child(1)', '#list li:nth-child(3)', { targetPosition: { x: 20, y: 25 } });
-await wait(400);
-console.log('after drag to bottom:', await status());
-await shot('dragged');
-
 // 10. persistence: close and reopen, sidebar should come back
-await page.click('#list li:nth-child(2)');   // make item 2 active
+await byTitle('Program Files').click();
 await wait(300);
 await run('cd C:\\work\\hershell\\src');            // folder should be remembered
 await wait(1200);

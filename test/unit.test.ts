@@ -1,7 +1,7 @@
 // Unit tests for pure logic. Run: npm test  (Node strips the TypeScript types itself)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detect, folderName, WORKING_WINDOW_MS } from '../src/status.ts';
+import { compareItems, detect, folderName, WORKING_WINDOW_MS } from '../src/status.ts';
 import { parseLayout, loadLayout, saveLayout } from '../src/layout.ts';
 
 const QUIET = WORKING_WINDOW_MS + 1;
@@ -35,6 +35,18 @@ test('folderName', () => {
   assert.equal(folderName('C:\\'), 'C:\\');
   assert.equal(folderName('Microsoft.PowerShell.Core\\FileSystem::\\\\srv\\share'), 'share');
   assert.equal(folderName(''), '…');
+});
+
+test('compareItems: 가나다 order by folder name, stable ties', () => {
+  const mk = (cwd: string, id: number) => ({ cwd, id });
+  const items = [
+    mk('C:\\work\\하', 1), mk('C:\\x\\가', 2), mk('C:\\work\\b', 3), mk('C:\\work\\A', 4),
+    mk('C:\\work\\item10', 5), mk('C:\\work\\item2', 6), mk('C:\\a\\gello', 8), mk('C:\\b\\gello', 7),
+  ];
+  const names = [...items].sort(compareItems).map((i) => `${folderName(i.cwd)}#${i.id}`);
+  // Korean collation puts Hangul before Latin; numbers compare numerically; same name -> full path.
+  assert.deepEqual(names, ['가#2', '하#1', 'A#4', 'b#3', 'gello#8', 'gello#7', 'item2#6', 'item10#5']);
+  assert.equal(compareItems(mk('C:\\same', 1), mk('C:\\same', 2)) < 0, true);
 });
 
 test('parseLayout: valid, clamped, broken', () => {
