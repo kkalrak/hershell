@@ -1,0 +1,26 @@
+{
+  "name": "hershell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fast terminal with a status sidebar",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "test": "node --test test/unit.test.ts",
+    "test:ui": "node build.mjs && node tools/drive.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.2.1",
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.18",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0"
+  }
+}
