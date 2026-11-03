@@ -11,7 +11,7 @@ test('detect: exited wins over everything', () => {
 });
 
 test('detect: prompt means idle and gives the folder', () => {
-  assert.deepEqual(detect(['out', 'PS C:\\work\\hershe> ', '', ''], 0, false), { status: 'idle', cwd: 'C:\\work\\hershe' });
+  assert.deepEqual(detect(['out', 'PS C:\\work\\hershell> ', '', ''], 0, false), { status: 'idle', cwd: 'C:\\work\\hershell' });
 });
 
 test('detect: approval question means blocked', () => {
@@ -30,8 +30,8 @@ test('detect: an old prompt above new output is not idle', () => {
 });
 
 test('folderName', () => {
-  assert.equal(folderName('C:\\work\\hershe'), 'hershe');
-  assert.equal(folderName('C:\\work\\hershe\\'), 'hershe');
+  assert.equal(folderName('C:\\work\\hershell'), 'hershell');
+  assert.equal(folderName('C:\\work\\hershell\\'), 'hershell');
   assert.equal(folderName('C:\\'), 'C:\\');
   assert.equal(folderName('Microsoft.PowerShell.Core\\FileSystem::\\\\srv\\share'), 'share');
   assert.equal(folderName(''), '…');
