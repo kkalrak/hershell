@@ -199,5 +199,5 @@ npm run test:ui -- <스크린샷 저장 폴더>      # 빌드 후 UI 자동 조�
 
 - 범위를 넓히기 전에 사용자에게 먼저 확인하세요. 사용자는 "최대한 단순하게"를 원합니다.
 - 변경 후에는 `npm run build`, `npx tsc -p .`, `node tools/drive.mjs`로 확인하세요.
-- 이 폴더는 아직 git 저장소가 아닙니다 (`.gitignore`만 있음).
+- git 저장소: https://github.com/kkalrak/hershell (브랜치 `main`). 커밋과 푸시는 사용자가 요청할 때만 합니다.
 - 사용자와는 한국어로 소통합니다.
