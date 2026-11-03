@@ -4,8 +4,8 @@ A fast terminal for Windows with a status sidebar, built for running `claude` an
 
 - One sidebar item = one PowerShell terminal (xterm.js + WebGL, node-pty)
 - Sidebar shows each shell's status: working / waiting for approval / done / idle
-- Item title is always the shell's current folder; order and folders are restored on restart
-- Drag items to reorder
+- Item title is always the shell's current folder; folders are restored on restart
+- Sidebar is sorted by folder name automatically (Korean collation, updates live)
 
 ```powershell
 npm install
