@@ -24,6 +24,14 @@ await Promise.all([
   }),
   build({
     ...common,
+    entryPoints: ['src/browser-preload.ts'],
+    outfile: 'dist/browser-preload.js',
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron'],
+  }),
+  build({
+    ...common,
     entryPoints: ['src/renderer.ts'],
     outfile: 'dist/renderer.js',
     platform: 'browser',
@@ -32,3 +40,4 @@ await Promise.all([
 ]);
 
 copyFileSync('src/index.html', 'dist/index.html');
+for (const name of ['browser.html', 'browser-renderer.js', 'browser-welcome.html']) copyFileSync(`src/${name}`, `dist/${name}`);

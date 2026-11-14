@@ -51,3 +51,31 @@ body {
 #terms { flex: 1; position: relative; min-width: 0; }
 .term { position: absolute; inset: 0; padding: 4px 0 0 6px; display: none; }
 .term.active { display: block; }
+
+#extensions { margin: 8px 8px 0; padding: 6px; background: #292929; color: #ccc; border: 1px solid #444; border-radius: 4px; cursor: pointer; }
+#extensions:hover { background: #3c3c3c; }
+dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 24px; color: #ddd; background: #252526; border: 1px solid #555; border-radius: 10px; box-shadow: 0 16px 64px #0008; }
+dialog::backdrop { background: #0009; }
+dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+dialog h2 { margin: 0; font-size: 20px; }
+dialog h3 { margin: 0 0 10px; font-size: 16px; }
+dialog p { line-height: 1.7; }
+dialog article { padding: 18px; border: 1px solid #444; border-radius: 6px; }
+dialog article + article { margin-top: 14px; }
+dialog button { padding: 7px 12px; color: #eee; background: #3a3a3a; border: 1px solid #666; border-radius: 4px; cursor: pointer; }
+dialog button:hover { background: #484848; }
+dialog button:disabled { opacity: .5; cursor: default; }
+#extensions-close { font-size: 20px; padding: 0 8px; }
+#extension-context { color: #aaa; overflow-wrap: anywhere; }
+#copy-result, #browser-copy-result { display: block; margin-top: 10px; color: #9bd5a0; font-size: 12px; }
+.telegram-badge { color: #75c7f0; flex: none; }
+.telegram-badge.connection-error { color: #e06c75; }
+#telegram-sidebar-status { margin: 4px 10px; font-size: 11px; color: #75c7f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#telegram-settings label { display: block; margin: 12px 0; color: #bbb; font-size: 12px; }
+#telegram-settings input { display: block; width: 100%; margin-top: 6px; padding: 8px; color: #eee; background: #1e1e1e; border: 1px solid #666; border-radius: 4px; }
+.telegram-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+#telegram-status, #telegram-result { font-size: 12px; overflow-wrap: anywhere; }
+#shell-menu { position: fixed; z-index: 10; padding: 5px; background: #2b2b2b; border: 1px solid #666; border-radius: 5px; box-shadow: 0 8px 24px #0008; }
+#shell-menu button { display: block; width: 100%; padding: 9px 12px; text-align: left; border: none; background: none; color: #eee; cursor: pointer; }
+#shell-menu button:hover, #shell-menu button:focus-visible { background: #444; }
+#shell-menu button:disabled { opacity: .4; cursor: default; }

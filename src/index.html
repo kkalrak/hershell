@@ -9,9 +9,44 @@
 <body>
   <aside id="sidebar">
     <ul id="list"></ul>
+    <p id="telegram-sidebar-status" role="status" hidden></p>
+    <button id="extensions">추가기능 보기</button>
     <button id="add" title="새 셸 (Ctrl+Shift+T)">+ 새 셸</button>
   </aside>
   <main id="terms"></main>
+  <dialog id="extensions-dialog" aria-labelledby="extensions-title">
+    <header><h2 id="extensions-title">추가기능</h2><button id="extensions-close" aria-label="닫기">×</button></header>
+    <article>
+      <h3>에이전트 간 메시지 전달</h3>
+      <p>다른 셸에서 실행 중인 에이전트에게 메시지를 보냅니다. 상대 상태와 관계없이 즉시 입력하고 제출합니다.</p>
+      <p id="extension-context"></p>
+      <button id="copy-usage">사용법 복사</button>
+      <span id="copy-result" role="status"></span>
+    </article>
+    <article>
+      <h3>웹 테스트 브라우저</h3>
+      <p>에이전트 전용 브라우저를 별도 창으로 열어 사이트를 확인하고 클릭·입력·스크린샷 촬영을 할 수 있습니다. ID별 로그인과 저장소가 분리되며 같은 ID로 다시 열면 이전 상태를 복원합니다.</p>
+      <button id="copy-browser-usage">사용법 복사</button>
+      <span id="browser-copy-result" role="status"></span>
+    </article>
+    <article>
+      <h3>텔레그램</h3>
+      <p>개인 채팅의 지시를 대표 셸 하나에 전달합니다. 왼쪽 셸을 우클릭해 대표를 지정하세요. 같은 봇을 쓰는 기존 릴레이는 먼저 종료하세요.</p>
+      <p id="telegram-status" role="status">설정 확인 중</p>
+      <form id="telegram-settings">
+        <label>봇 토큰<input id="telegram-token" type="password" autocomplete="off" spellcheck="false" placeholder="봇 토큰"></label>
+        <label>허용할 개인 채팅 ID<input id="telegram-chat" type="text" inputmode="numeric" autocomplete="off" placeholder="본인의 숫자 ID"></label>
+        <div class="telegram-actions"><button type="submit">저장</button><button id="telegram-check" type="button">연결 확인</button></div>
+      </form>
+      <div class="telegram-actions"><button id="telegram-import" type="button">설정 파일 가져오기</button><button id="telegram-clear" type="button">연결 해제·설정 삭제</button></div>
+      <button id="copy-telegram-usage" type="button">사용법 복사</button>
+      <p id="telegram-result" role="status"></p>
+    </article>
+  </dialog>
+  <div id="shell-menu" role="menu" hidden>
+    <button id="telegram-assign" role="menuitem">텔레그램 대표로 지정</button>
+    <button id="telegram-unassign" role="menuitem">텔레그램 대표 해제</button>
+  </div>
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+import { initExtensions } from './extensions';
+import { initTelegram } from './telegram-ui';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -23,6 +25,7 @@ const TERM_OPTIONS = {
 /** One sidebar entry = one terminal = one shell process. */
 interface Item {
   id: number;
+  key: string;
   term: Terminal;
   fit: FitAddon;
   el: HTMLDivElement;      // terminal container
@@ -41,6 +44,7 @@ let restoring = false;
 
 const listEl = document.getElementById('list') as HTMLUListElement;
 const termsEl = document.getElementById('terms') as HTMLElement;
+const telegramUI = initTelegram(api, () => active?.term.focus());
 
 // ---------- helpers ----------
 function tailLines(term: Terminal, n: number): string[] {
@@ -62,13 +66,15 @@ function ordered(): Item[] {
 function persist() {
   if (restoring) return;
   const list = ordered();
-  storeLayout({ cwds: list.map((it) => it.cwd), active: active ? Math.max(0, list.indexOf(active)) : 0 });
+  storeLayout({ cwds: list.map((it) => it.cwd), shellKeys: list.map(it => it.key), active: active ? Math.max(0, list.indexOf(active)) : 0 });
 }
 
 function setCwd(it: Item, cwd: string) {
   it.cwd = cwd;
+  if (cwd) api.setCwd(it.id, cwd);
   it.title.textContent = folderName(cwd);
   it.li.title = cwd; // full path on hover
+  telegramUI.refresh();
 }
 
 /** Keep the sidebar sorted by folder name. Touches the DOM only when the order actually changes. */
@@ -126,7 +132,7 @@ function createTerminal(el: HTMLElement): { term: Terminal; fit: FitAddon } {
 }
 
 // ---------- items ----------
-async function addShell(cwd = '') {
+async function addShell(cwd = '', key: string = crypto.randomUUID()) {
   const el = document.createElement('div');
   el.className = 'term';
   termsEl.appendChild(el);
@@ -141,7 +147,7 @@ async function addShell(cwd = '') {
 
   let id: number;
   try {
-    id = await api.create(term.cols, term.rows, cwd || undefined);
+    id = await api.create(term.cols, term.rows, cwd || undefined, key);
   } catch (err) {
     term.dispose(); el.remove(); li.remove();
     console.error('failed to start shell', err);
@@ -151,9 +157,11 @@ async function addShell(cwd = '') {
     el.style.visibility = '';
   }
 
-  const it: Item = { id, term, fit, el, li, dot, title, cwd: '', status: 'idle', lastOutput: 0, exited: false };
+  const it: Item = { id, key, term, fit, el, li, dot, title, cwd: '', status: 'idle', lastOutput: 0, exited: false };
   setCwd(it, cwd);
   items.set(id, it);
+  li.dataset.shellId = String(id);
+  telegramUI.refresh();
   sortList();
 
   term.onData((d) => { if (!it.exited) api.write(id, d); });
@@ -163,6 +171,7 @@ async function addShell(cwd = '') {
   close.addEventListener('click', (e) => { e.stopPropagation(); removeItem(it); });
 
   activate(it);
+  api.ready(id);
 }
 
 /** Return false to stop xterm from handling the key. */
@@ -219,6 +228,18 @@ function removeItem(it: Item) {
 }
 
 // ---------- pty events ----------
+api.onMessage(async (requestId, to, message) => {
+  const it = items.get(to);
+  if (!it || it.exited) { api.delivered(requestId, false); return; }
+  try {
+    it.term.paste(message);
+    await api.submitMessage(to, requestId, message.length);
+    if (items.get(to) !== it || it.exited) throw new Error('Shell exited');
+    it.term.input('\r', true);
+    api.delivered(requestId, true);
+  } catch { api.delivered(requestId, false); }
+});
+
 api.onData((id, data) => {
   const it = items.get(id);
   if (!it) return;
@@ -230,6 +251,7 @@ api.onExit((id, code) => {
   const it = items.get(id);
   if (!it) return;
   it.exited = true;
+  it.li.dataset.exited = 'true';
   it.term.write(`\r\n\x1b[90m[셸 종료: ${code}]\x1b[0m\r\n`);
 });
 
@@ -255,7 +277,7 @@ async function start() {
   const layout = loadLayout();
   if (!layout) { await addShell(); return; }
   restoring = true;
-  for (const cwd of layout.cwds) await addShell(cwd);
+  for (let i = 0; i < layout.cwds.length; i++) await addShell(layout.cwds[i], layout.shellKeys?.[i]);
   restoring = false;
   const target = ordered()[layout.active];
   if (target) activate(target);
@@ -263,3 +285,5 @@ async function start() {
 }
 
 start();
+
+initExtensions(api, () => active, () => active?.term.focus());
