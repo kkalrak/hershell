@@ -1,0 +1,27 @@
+{
+  "appId": "io.github.kkalrak.hershell",
+  "productName": "hershell",
+  "directories": { "output": "release" },
+  "asar": false,
+  "npmRebuild": false,
+  "extraFiles": [
+    { "from": "PORTABLE.txt", "to": "README-portable.txt" },
+    { "from": ".env.example", "to": ".env.example" }
+  ],
+  "files": [
+    "dist/**/*",
+    "!**/*.map",
+    "assets/icon.ico",
+    "package.json",
+    "README.md",
+    ".env.example"
+  ],
+  "win": {
+    "target": [{ "target": "zip", "arch": ["x64"] }],
+    "icon": "assets/icon.ico",
+    "executableName": "hershell",
+    "signExecutable": false,
+    "artifactName": "hershell-${version}-windows-${arch}.zip"
+  },
+  "publish": null
+}

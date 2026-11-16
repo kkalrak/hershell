@@ -1,0 +1,26 @@
+hershell for Windows x64
+
+1. Extract the entire ZIP into a folder you can keep.
+2. Double-click hershell.exe. No installer, Node.js, or npm is needed for the app.
+3. Keep all DLLs and folders with the executable. Do not copy hershell.exe alone.
+
+Codex CLI and Claude Code are separate tools. Install them yourself if needed.
+The app opens a PowerShell prompt and does not start an agent automatically.
+
+Settings and browser profiles are stored in %APPDATA%\hershell on this PC.
+This build is portable in the sense that it needs no installation; it does not
+store all private data beside the executable. Encrypted Telegram settings are
+not intended to be moved between Windows accounts or PCs.
+
+Telegram: open View extensions, then configure the bot in the Telegram section.
+You may instead copy .env.example to .env beside hershell.exe and fill it locally.
+Never share a filled .env file or your app profile.
+
+This build is unsigned. Windows may display an unknown-publisher warning.
+Download only from the project's release page and compare SHA256SUMS.txt.
+
+Full English manual:
+https://github.com/kkalrak/hershell#readme
+
+Downloads:
+https://github.com/kkalrak/hershell/releases/latest

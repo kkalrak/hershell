@@ -4,7 +4,15 @@ A Windows terminal with a folder-sorted sidebar, agent messaging, an integrated 
 
 Each sidebar entry owns one real PowerShell terminal. Run Codex CLI, Claude Code, or other terminal applications yourself. There are no splits, tabs, or workspaces.
 
-## Install and run
+## Download and run on Windows
+
+Download the Windows x64 ZIP from [GitHub Releases](https://github.com/kkalrak/hershell/releases/latest), extract the entire archive, and double-click **hershell.exe**. No installer, Node.js, or npm is required for the app itself. Keep its DLLs and folders together; the executable alone is not enough.
+
+This release targets 64-bit Intel/AMD Windows PCs. Codex CLI and Claude Code are separate tools and must be installed independently if you want to use them. The build is unsigned, so Windows may show an unknown-publisher warning. Use the release's `SHA256SUMS.txt` to verify the download.
+
+"Portable" means no installation. Settings and browser profiles still live in `%APPDATA%\hershell`, not beside the executable. Telegram credentials encrypted for one Windows account or PC are not intended to be moved to another.
+
+## Build and run from source
 
 Requirements: Windows, Node.js 24 or newer, and npm.
 
@@ -181,7 +189,7 @@ Telegram connects to **one representative shell**. That agent can delegate throu
 4. Right-click a sidebar entry and choose **텔레그램 대표로 지정** (Assign as Telegram representative).
 5. Copy the Telegram usage instructions and give them to that agent.
 
-Alternatively, copy `.env.example` to `.env`, fill it locally, and click **설정 파일 가져오기** (Import settings). On the first normal-profile launch, a root `.env` is imported automatically if no saved settings or disconnect marker exist.
+Alternatively, copy `.env.example` to `.env`, fill it locally, and click **설정 파일 가져오기** (Import settings). Put it beside `hershell.exe` in the portable build, or in the project root when running from source. On the first normal-profile launch, that file is imported automatically if no saved settings or disconnect marker exist.
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=
@@ -233,6 +241,15 @@ Git ignores local environment files, runtime data, logs, default screenshots, de
 ## Development and tests
 
 Electron, xterm.js with WebGL, `@lydell/node-pty`, esbuild, and plain TypeScript power the app. Output is batched every 16 ms. Scrollback is capped at 10,000 lines. Only the visible terminal is refitted on resize. There is no frontend framework.
+
+Build the Windows x64 portable ZIP:
+
+```powershell
+npm run dist:win
+npm run test:packaged
+```
+
+Artifacts are written to `release/`, including `hershell-<version>-windows-x64.zip`. The packaging configuration includes only compiled app files, production dependencies, icons, and public documentation/templates. It excludes local `.env`, app profiles, tests, source maps, and Git metadata. `test:packaged` extracts the actual ZIP and checks native shell input, restart persistence, browser rendering, settings import, and accidental inclusion of local secrets. It launches the app with a minimal system PATH, without Node/npm directories.
 
 ```powershell
 npm run build

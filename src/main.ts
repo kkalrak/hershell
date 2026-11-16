@@ -100,9 +100,9 @@ ipcMain.on('pty:ready', (e, id: number) => {
     void telegram.select(id).catch(() => telegram.setError('대표 셸 자동 연결에 실패했습니다. 다시 연결하세요.'));
   }
 });
-ipcMain.handle('telegram:import', e => {
+ipcMain.handle('telegram:import', async e => {
   trustedShellWindow(e);
-  telegram.configure(telegramSettings.importFile());
+  telegram.configure(await telegramSettings.importFile());
   return telegram.status();
 });
 ipcMain.handle('telegram:verify', async (e, input?: TelegramConfig) => {
@@ -111,9 +111,9 @@ ipcMain.handle('telegram:verify', async (e, input?: TelegramConfig) => {
 });
 ipcMain.handle('telegram:save', async (e, input: TelegramConfig) => {
   trustedShellWindow(e);
-  const config = { token: input.token || telegramSettings.load()?.token || '', chatId: input.chatId };
+  const config = { token: input.token || (await telegramSettings.load())?.token || '', chatId: input.chatId };
   await telegram.verify(config);
-  telegramSettings.save(config); telegram.configure(config);
+  await telegramSettings.save(config); telegram.configure(config);
   return telegram.status();
 });
 ipcMain.handle('telegram:clear', e => {
@@ -248,16 +248,17 @@ if (!app.requestSingleInstanceLock()) {
   });
   Menu.setApplicationMenu(null);
   app.whenReady().then(async () => {
+    const envFile = path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), '.env');
     const testBase = process.env.HERSHELL_USER_DATA ? process.env.HERSHELL_TELEGRAM_TEST_URL : undefined;
     const base = testBase && /^http:\/\/127\.0\.0\.1:\d+$/.test(testBase) ? testBase : undefined;
     telegram = new TelegramBridge({ base, hasShell: id => sessions.has(id),
       deliver: (id, text, signal) => messages.deliver(0, id, text, signal), changed: status => send('telegram:status', status) });
-    telegramSettings = new TelegramSettings(path.join(app.getPath('userData'), 'telegram.enc'), path.join(app.getAppPath(), '.env'));
+    telegramSettings = new TelegramSettings(path.join(app.getPath('userData'), 'telegram.enc'), envFile);
     representativeKey = telegramSettings.loadRepresentative();
     try {
-      const stored = telegramSettings.load();
+      const stored = await telegramSettings.load();
       if (stored) telegram.configure(stored);
-      else if (!telegramSettings.hasSavedChoice() && !process.env.HERSHELL_USER_DATA && existsSync(path.join(app.getAppPath(), '.env'))) telegram.configure(telegramSettings.importFile());
+      else if (!telegramSettings.hasSavedChoice() && !process.env.HERSHELL_USER_DATA && existsSync(envFile)) telegram.configure(await telegramSettings.importFile());
     } catch { telegram.setError('텔레그램 설정을 불러오지 못했습니다. 추가기능에서 설정을 확인하세요.'); }
     try {
       agentApi = await startAgentApi(listShells, (from, to, message) => messages.deliver(from, to, message), () => browsers,

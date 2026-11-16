@@ -38,6 +38,16 @@ async function until(check, label) {
  const deadline=Date.now()+12000;
  while(!(await check())){if(Date.now()>deadline)throw Error('Timed out: '+label);await new Promise(r=>setTimeout(r,100));}
 }
+// Close the native window and await shutdown before disconnecting the debugger.
+// Playwright's close disconnects early while our asynchronous quit handler runs.
+async function closeApp() {
+  const closed = app.waitForEvent('close');
+  const child = app.process();
+  const exited = new Promise(resolve => child.once('close', resolve));
+  await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].close(); }).catch(() => {});
+  await closed;
+  await exited;
+}
 async function launch(){
  app=await electron.launch({args:['.'],env});page=await app.firstWindow();
  await page.waitForFunction(()=>window.__hershell?.tail(3).includes('PS '));
@@ -142,7 +152,7 @@ try {
    const rows=[...document.querySelectorAll('#list li')];
    return JSON.parse(localStorage.getItem('hershell.layout.v2')).shellKeys[rows.findIndex(li=>li.dataset.shellId==='1')];
  });
- await app.close();app=null;
+ await closeApp();app=null;
  await launch();
  assert.equal((await state()).configured,true);
  await until(async()=>(await state()).phase==='connected','restore selected representative');
@@ -155,7 +165,7 @@ try {
  assert.equal(restoredKey,savedRepresentativeKey);
  assert.equal(await page.locator('.telegram-badge').count(),1);
  await page.evaluate(()=>window.pty.telegramSelect(null));
- await app.close();app=null;
+ await closeApp();app=null;
  await launch();
  assert.equal((await state()).configured,true);
  assert.equal((await state()).representative,null,'explicit unassign survives restart');
@@ -164,10 +174,10 @@ try {
  await until(async()=>(await state()).configured===false,'clear');
  assert.equal(existsSync(path.join(profile,'telegram.enc')),false);
  assert.equal(existsSync(path.join(profile,'telegram.enc.disabled')),true);
- await app.close();app=null;
+ await closeApp();app=null;
  await launch();
  assert.equal((await state()).configured,false,'disconnect survives restart');
  assert.equal((await state()).representative,null);
  console.log('PASS: Telegram UI, encrypted settings, private sender filter, backlog skip, terminal paste+Enter, representative switch/exit, shell-authenticated reply, webhook/conflict errors, restart and deletion.');
  console.log('Artifacts:',dir);
-} finally {if(app)await app.close();mock.closeAllConnections();mock.close();}
+} finally {if(app)await closeApp();mock.closeAllConnections();mock.close();}

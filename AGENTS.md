@@ -215,7 +215,7 @@ npm run test:ui -- <스크린샷 저장 폴더>      # 빌드 후 UI 자동 조�
 1. 실제 claude와 codex에서 🔴 감지가 맞는지 확인하고 `BLOCKED_RE`를 조정
 2. 기존 PowerShell 창이나 Windows Terminal과 속도 비교 측정
 3. pwsh 7 실행 지원 (`findShell` 수정)
-4. 실행 파일(.exe) 패키징 (예: electron-builder, 아이콘은 `assets/icon.ico` 사용)
+4. 휴대용 Windows 빌드의 ARM64 지원·코드 서명 검토 (현재 x64 ZIP 제공, §31)
 
 ## 14. 작업 규칙
 
@@ -417,3 +417,17 @@ npm run test:ui -- <스크린샷 저장 폴더>      # 빌드 후 UI 자동 조�
 - 사용자 요청으로 README.md를 영문 사용설명서로 확장했습니다. 설치·기본 조작·폴더명 메시지 주소·브라우저 API·텔레그램 설정/대표 복원/회신·개인정보 저장·검증 방법을 설명합니다. `.env.example`에는 실제 값 없이 빈 설정 항목만 제공합니다.
 - 소스/문서/테스트의 개인 PC 계정명은 일반 예시 또는 런타임 홈 폴더 조회로 바꿨습니다. 과거 커밋의 사용자 경로와 작성자 이름·이메일도 일반 표기로 재작성하도록 사용자가 명시적으로 요청했습니다. 이력 백업은 저장소 밖 로컬에만 둡니다.
 - 이력 교체와 푸시는 이번 사용자 요청으로 승인되었습니다. 기존 커밋·푸시 제한은 이후에도 유지합니다. 원격 갱신은 확인한 이전 해시에 대한 force-with-lease로 수행합니다.
+
+
+## 31. Windows x64 휴대용 ZIP (2026-11-16)
+- 사용자 요청: 설치용 Setup.exe는 만들지 않고, ZIP을 풀어 `hershell.exe`를 더블클릭하는 휴대용 배포만 제공합니다. 앱 자체에는 Node.js/npm 설치가 필요 없습니다. Codex/Claude CLI는 별도 설치합니다. DLL/resources 폴더를 함께 유지해야 하며 exe 하나만 옮기면 안 됩니다.
+- `electron-builder.json`과 개발 의존성 electron-builder 26.18을 추가했습니다. `npm run dist:win`은 빌드 후 x64 ZIP을 `release/hershell-<version>-windows-x64.zip`으로 만듭니다. `--publish never`로 빌드만으로 외부 업로드되지 않게 합니다. release 폴더는 Git 제외입니다. 공개할 때는 소스는 Git, ZIP과 SHA-256은 GitHub Release에 업로드합니다.
+- `npmRebuild:false`로 N-API 기반 @lydell/node-pty의 사전 빌드 바이너리를 사용합니다. 네이티브 모듈/ConPTY worker 경로가 실제 파일로 존재하게 asar는 사용하지 않습니다. 파일 포함 목록은 dist(소스맵 제외), 아이콘, package.json, 공개 README/빈 환경 예시로 제한하며 production 의존성만 포함합니다. 테스트·프로필·실제 .env·Git 메타데이터는 배포하지 않습니다.
+- 사용자 설정 위치는 기존 `%APPDATA%\hershell` 그대로입니다. 설치가 없다는 의미의 휴대용이며 USB 폴더에 모든 사용자 데이터를 저장하는 모드는 아닙니다. userData와 단일 실행 정책은 바꾸지 않습니다.
+- 패키징 실행에서는 `.env`를 exe 옆에서 가져옵니다. 개발 실행은 기존 프로젝트 루트를 사용합니다. 공개 PORTABLE.txt를 ZIP 루트의 README-portable.txt로, 빈 .env.example을 exe 옆에 복사합니다. 봇 토큰/채팅 ID/현재 사용자 설정은 포함하지 않습니다.
+- 코드 서명 인증서가 없어 unsigned 빌드이며 실행 시 Windows의 게시자 확인 경고가 나올 수 있습니다. ARM64 전용 바이너리는 아직 제공하지 않습니다. 앱 아이콘/메타데이터는 electron-builder 리소스 편집으로 지정합니다.
+- `npm run test:packaged`는 실제 ZIP을 별도 임시 폴더에 풀어 패키징된 exe를 실행합니다. Node/npm 경로를 뺀 시스템 PATH에서 PTY 셸 입력, 사이드바 재실행 복원, 브라우저 API/PNG, exe 옆의 가짜 .env 가져오기와 암호화 저장을 확인합니다. 실제 .env의 자격 증명과 개인 설정 파일이 ZIP에 없는지도 검사합니다. 실제 Telegram 메시지는 보내지 않습니다.
+- Node/PowerShell의 Expand-Archive 조합이 모듈 경로에 따라 실패할 수 있어 테스트 압축 해제는 Windows 기본 .NET ZipFile.ExtractToDirectory를 사용합니다. 테스트는 임시 프로필로 실행하므로 실제 앱을 종료하거나 설정을 바꾸지 않습니다.
+- 사용자 지시로 이번 패키징 변경은 Git에 커밋·푸시하고 휴대용 ZIP을 GitHub Release에 게시합니다. 이후 작업의 커밋/푸시는 다시 사용자 요청을 따릅니다.
+
+- 재시작 테스트는 네이티브 창을 닫고 앱 종료 이벤트와 프로세스 종료까지 기다립니다. 암호화 설정은 Electron 45의 비동기 safeStorage API로 초기화 완료를 기다린 뒤 읽고 씁니다. 기존 동기 API로 저장한 설정도 읽을 수 있습니다.

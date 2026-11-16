@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "Fast terminal with a status sidebar",
+  "author": "Hershell Contributors",
   "main": "dist/main.js",
   "scripts": {
     "build": "node build.mjs",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "test:packaged": "node tools/test-packaged.mjs",
     "start": "node build.mjs && electron .",
     "test": "node --test test/unit.test.ts",
     "test:ui": "node build.mjs && node tools/drive.mjs"
@@ -13,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "playwright-core": "^1.64.1",
     "typescript": "^7.0.2"

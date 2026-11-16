@@ -9,13 +9,13 @@ export class TelegramSettings {
   private file: string;
   private envFile: string;
   constructor(file: string, envFile: string) { this.file = file; this.envFile = envFile; }
-  private encryptionAvailable() {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error('OS 암호화 저장소를 사용할 수 없습니다.');
+  private async encryptionAvailable() {
+    if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('OS 암호화 저장소를 사용할 수 없습니다.');
   }
-  load(): TelegramConfig | null {
+  async load(): Promise<TelegramConfig | null> {
     if (existsSync(this.file + '.disabled') || !existsSync(this.file)) return null;
-    this.encryptionAvailable();
-    try { return validateTelegramConfig(JSON.parse(safeStorage.decryptString(readFileSync(this.file)))); }
+    await this.encryptionAvailable();
+    try { return validateTelegramConfig(JSON.parse((await safeStorage.decryptStringAsync(readFileSync(this.file))).result)); }
     catch { throw new Error('저장된 텔레그램 설정을 읽지 못했습니다. 설정을 다시 저장하세요.'); }
   }
   hasSavedChoice() { return existsSync(this.file) || existsSync(this.file + '.disabled'); }
@@ -32,18 +32,18 @@ export class TelegramSettings {
     writeFileSync(file + '.tmp', JSON.stringify(key));
     renameSync(file + '.tmp', file);
   }
-  save(config: TelegramConfig) {
-    this.encryptionAvailable();
-    const encrypted = safeStorage.encryptString(JSON.stringify(validateTelegramConfig(config)));
+  async save(config: TelegramConfig) {
+    await this.encryptionAvailable();
+    const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(validateTelegramConfig(config)));
     writeFileSync(this.file + '.tmp', encrypted);
     renameSync(this.file + '.tmp', this.file);
     if (existsSync(this.file + '.disabled')) unlinkSync(this.file + '.disabled');
   }
-  importFile() {
-    if (!existsSync(this.envFile)) throw new Error('프로젝트 루트의 .env 설정 파일이 없습니다.');
+  async importFile() {
+    if (!existsSync(this.envFile)) throw new Error('앱 폴더의 .env 설정 파일이 없습니다. 개발 중에는 프로젝트 루트에 두세요.');
     const env = parseEnv(readFileSync(this.envFile, 'utf8'));
     const config = validateTelegramConfig({ token: env.TELEGRAM_BOT_TOKEN ?? '', chatId: env.TELEGRAM_CHAT_ID ?? env.TELEGRAM_OWNER_ID ?? '' });
-    this.save(config);
+    await this.save(config);
     return config;
   }
   clear() {
