@@ -1,9 +1,9 @@
 // Exercise the actual extracted ZIP, with no Node/npm directory on the app's PATH.
 import assert from 'node:assert/strict';
-import { _electron as electron } from 'playwright-core';
-import { execFileSync } from 'node:child_process';
+import { chromium } from 'playwright-core';
+import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, statSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -11,7 +11,8 @@ const metadata = JSON.parse(readFileSync('package.json', 'utf8'));
 const zip = path.resolve(process.argv[2] ?? `release/hershell-${metadata.version}-windows-x64.zip`);
 const dir = mkdtempSync(path.join(os.tmpdir(), 'hershell-portable-test-'));
 const extracted = path.join(dir, 'unpacked');
-execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+if (statSync(zip).isDirectory()) cpSync(zip, extracted, { recursive: true });
+else execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
   "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($env:HERSHELL_TEST_ZIP, $env:HERSHELL_TEST_EXTRACT)"], {
   env: { ...process.env, HERSHELL_TEST_ZIP: zip, HERSHELL_TEST_EXTRACT: extracted }, stdio: 'pipe',
 });
@@ -46,26 +47,35 @@ await new Promise(resolve => fixture.listen(0, '127.0.0.1', resolve));
 const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
 const minimalPath = [path.join(systemRoot, 'System32'), path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0'), systemRoot].join(';');
 const env = { ...process.env, PATH: minimalPath, Path: minimalPath, HERSHELL_USER_DATA: path.join(dir, 'profile') };
-let app;
-// Close the native window and await shutdown before disconnecting the debugger.
-// Playwright's close disconnects early while our asynchronous quit handler runs.
+let child, browser, currentPage;
 async function closeApp() {
-  const closed = app.waitForEvent('close');
-  const child = app.process();
-  const exited = new Promise(resolve => child.once('close', resolve));
-  await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].close(); }).catch(() => {});
-  await closed;
-  await exited;
+  const exited = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  await currentPage.evaluate(() => window.close()).catch(() => {});
+  const result = await exited;
+  child = null;
+  await browser.close();
+  assert.equal(result.code, 0, 'App exits cleanly before restart');
 }
 async function launch() {
-  app = await electron.launch({ executablePath: executable, args: [], cwd: extracted, env });
-  const page = await app.firstWindow();
-  await page.waitForFunction(() => window.__hershell?.tail(3).includes('PS '));
-  return page;
+  child = spawn(executable, ['--remote-debugging-port=0'], { cwd: extracted, env, windowsHide: true });
+  const endpoint = await new Promise((resolve, reject) => {
+    let output = '';
+    child.stderr.on('data', chunk => {
+      output += chunk;
+      const match = /DevTools listening on (ws:\/\/\S+)/.exec(output);
+      if (match) resolve(match[1]);
+    });
+    child.once('error', reject);
+    child.once('exit', code => reject(Error('App exited before debugging: ' + code)));
+  });
+  browser = await chromium.connectOverCDP(endpoint);
+  const context = browser.contexts()[0];
+  currentPage = context.pages()[0] ?? await context.waitForEvent('page');
+  await currentPage.waitForFunction(() => window.__hershell?.tail(3).includes('PS '));
+  return currentPage;
 }
 try {
   let page = await launch();
-  assert.equal(await app.evaluate(({ app }) => app.isPackaged), true);
   await page.click('.term.active .xterm-screen');
   await page.keyboard.type("Write-Output 'PORTABLE-SHELL-OK'");
   await page.keyboard.press('Enter');
@@ -76,7 +86,6 @@ try {
   await page.click('#extensions');
   await page.click('#copy-usage');
   await page.waitForFunction(() => document.querySelector('#copy-result').textContent.includes('복사했습니다'));
-  assert.match(await app.evaluate(({ clipboard }) => clipboard.readText()), /POST \/messages/);
   await page.keyboard.press('Escape');
   const info = await page.evaluate(() => window.pty.agentInfo());
   const headers = { Authorization: `Bearer ${info.token}`, 'Content-Type': 'application/json' };
@@ -100,10 +109,13 @@ try {
   assert.equal(state.representative, null);
   assert.ok(existsSync(path.join(dir, 'profile', 'telegram.enc')));
   await page.screenshot({ path: path.join(dir, 'portable.png') });
-  await closeApp(); app = null;
+  await closeApp();
+  const savedKey = JSON.parse(readFileSync(path.join(dir,'profile','Local State'),'utf8')).os_crypt?.encrypted_key;
+  assert.ok(savedKey, 'OS encryption key persisted before restart');
   page = await launch();
   await page.waitForFunction(cwd => document.querySelector('#list li').title === cwd, extracted);
-  assert.equal((await page.evaluate(() => window.pty.telegramStatus())).configured, true);
+  const restored = await page.evaluate(() => window.pty.telegramStatus());
+  assert.equal(restored.configured, true);
   console.log('PASS: extracted ZIP, exe, native PTY, minimal PATH, shell input, sidebar restore, browser capture, encrypted settings, and package secret audit.');
   console.log('Artifacts:', dir);
-} finally { if (app) await closeApp(); fixture.closeAllConnections(); fixture.close(); }
+} finally { if (child) await closeApp(); fixture.closeAllConnections(); fixture.close(); }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Menu, session } from 'electron';
 import * as pty from '@lydell/node-pty';
 import { existsSync, statSync } from 'node:fs';
 import * as path from 'node:path';
@@ -227,7 +227,7 @@ function createWindow() {
   win.on('closed', () => { win = null; });
   win.on('close', e => {
     // The terminal owns the app lifecycle even while browser windows are open.
-    if (!quitting) { e.preventDefault(); app.quit(); }
+    if (!quitting) { e.preventDefault(); setImmediate(() => app.quit()); }
   });
 }
 
@@ -248,6 +248,8 @@ if (!app.requestSingleInstanceLock()) {
   });
   Menu.setApplicationMenu(null);
   app.whenReady().then(async () => {
+    // Initialize the persistent browser context before accessing its encryption keys.
+    session.defaultSession;
     const envFile = path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), '.env');
     const testBase = process.env.HERSHELL_USER_DATA ? process.env.HERSHELL_TELEGRAM_TEST_URL : undefined;
     const base = testBase && /^http:\/\/127\.0\.0\.1:\d+$/.test(testBase) ? testBase : undefined;
@@ -283,6 +285,12 @@ app.on('before-quit', e => {
   agentApi?.close();
   telegram?.stop();
   messages.close();
-  for (const s of sessions.values()) { try { s.proc.kill(); } catch { /* already exited */ } }
-  void (browsers?.shutdown() ?? Promise.resolve()).finally(() => app.quit());
+  const shellExits = [...sessions.values()].map(s => new Promise<void>(resolve => {
+    const timeout = setTimeout(resolve, 2000);
+    s.proc.onExit(() => { clearTimeout(timeout); resolve(); });
+    try { s.proc.kill(); } catch { clearTimeout(timeout); resolve(); }
+  }));
+  session.defaultSession.flushStorageData();
+  void Promise.all([...shellExits, browsers?.shutdown(), session.defaultSession.cookies.flushStore()])
+    .finally(() => setImmediate(() => app.quit()));
 });
