@@ -3,10 +3,12 @@ import { randomBytes } from 'node:crypto';
 import type { BrowserManager } from './browser-manager';
 import type { TelegramBridge } from './telegram';
 import { shellAddresses, resolveShell, ShellAddressError, type ShellSession } from './shell-address';
+import { isTaskState, type AutoState, type TaskState } from './auto-continue';
 
 /** Loopback only; browser requests are rejected. The token changes on every launch. */
 export async function startAgentApi(list: () => ShellSession[], deliver: (from: number, to: number, message: string) => Promise<void>, browsers?: () => BrowserManager,
-  telegram?: { bridge: () => TelegramBridge; shellForToken: (token: string) => number | undefined }) {
+  telegram?: { bridge: () => TelegramBridge; shellForToken: (token: string) => number | undefined },
+  tasks?: { get: (id: number) => AutoState; report: (id: number, state: TaskState) => AutoState }) {
   const token = randomBytes(32).toString('hex');
   const server = createServer(async (req, res) => {
     const reply = (status: number, body: unknown) => {
@@ -17,6 +19,21 @@ export async function startAgentApi(list: () => ShellSession[], deliver: (from: 
     const authenticatedShell = telegram?.shellForToken(bearer);
     if (req.headers.origin || (bearer !== token && authenticatedShell === undefined)) {
       reply(401, { error: 'Unauthorized' }); return;
+    }
+    if (tasks && req.url === '/task' && (req.method === 'GET' || req.method === 'POST')) {
+      if (authenticatedShell === undefined) { reply(403, { error: 'Use HERSHELL_SHELL_TOKEN' }); return; }
+      if (req.method === 'GET') { reply(200, tasks.get(authenticatedShell)); return; }
+      try {
+        let raw = ''; req.setEncoding('utf8');
+        for await (const chunk of req) {
+          raw += chunk;
+          if (Buffer.byteLength(raw) > 4096) { reply(413, { error: 'Request too large' }); return; }
+        }
+        const input = JSON.parse(raw);
+        if (!isTaskState(input?.state)) { reply(400, { error: 'Expected working, waiting, complete, or blocked' }); return; }
+        reply(200, tasks.report(authenticatedShell, input.state));
+      } catch { reply(400, { error: 'Invalid task report' }); }
+      return;
     }
     if (req.method === 'GET' && req.url === '/shells') { reply(200, shellAddresses(list())); return; }
     if (req.method === 'GET' && req.url === '/shells/me') {

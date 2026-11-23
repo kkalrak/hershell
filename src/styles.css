@@ -69,6 +69,7 @@ dialog button:disabled { opacity: .5; cursor: default; }
 #extension-context { color: #aaa; overflow-wrap: anywhere; }
 #copy-result, #browser-copy-result { display: block; margin-top: 10px; color: #9bd5a0; font-size: 12px; }
 .telegram-badge { color: #75c7f0; flex: none; }
+.auto-badge { color: #e6c66a; flex: none; }
 .telegram-badge.connection-error { color: #e06c75; }
 #telegram-sidebar-status { margin: 4px 10px; font-size: 11px; color: #75c7f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #telegram-settings label { display: block; margin: 12px 0; color: #bbb; font-size: 12px; }

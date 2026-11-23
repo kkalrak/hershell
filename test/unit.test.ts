@@ -6,6 +6,19 @@ import { compareItems, detect, folderName, WORKING_WINDOW_MS } from '../src/stat
 import { validateTelegramConfig } from '../src/telegram.ts';
 import { MessageDelivery } from '../src/message-delivery.ts';
 import { parseLayout, loadLayout, saveLayout } from '../src/layout.ts';
+import { readyToContinue, isTaskState, AUTO_QUIET_MS } from '../src/auto-continue.ts';
+
+test('auto continue: silence alone and stale/input/busy/approval prompts never qualify', () => {
+  assert.equal(readyToContinue(['answer', '› '], AUTO_QUIET_MS, 'done'), true);
+  assert.equal(readyToContinue(['❯ '], AUTO_QUIET_MS, 'done'), true);
+  for (const status of ['blocked', 'working', 'idle', 'exited'] as const)
+    assert.equal(readyToContinue(['› '], AUTO_QUIET_MS, status), false);
+  for (const lines of [['answer'], ['› do something'], ['›', 'still running'], ['Thinking', '›'], ['esc to interrupt', '❯'], ['PS C:\\>']])
+    assert.equal(readyToContinue(lines, AUTO_QUIET_MS, 'done'), false);
+  assert.equal(readyToContinue(['›'], AUTO_QUIET_MS - 1, 'done'), false);
+  for (const state of ['working', 'waiting', 'complete', 'blocked']) assert.equal(isTaskState(state), true);
+  for (const state of [null, {}, 'done', '']) assert.equal(isTaskState(state), false);
+});
 
 const QUIET = WORKING_WINDOW_MS + 1;
 

@@ -70,6 +70,26 @@ Click **추가기능 보기** (View extensions), above New shell. Each extension
 
 Copy instructions again after restarting: the local API port and credentials change. Instructions ask agents to keep prompts, inter-agent messages, and user replies short and terse while preserving accurate code and API fields.
 
+Each extension also has **Send to current shell** and **Send to all shells** buttons (shown in Korean). They paste that extension's instructions and submit Enter. Start an agent in each recipient first: delivery does not check whether a terminal is running an agent, a shell prompt, or an approval screen. All means every currently running shell. Partial failures are counted and are not retried automatically. Copy remains available.
+
+## Automatic continuation
+
+Right-click a sidebar entry and enable automatic continuation. A ↻ badge marks the selected shell. It starts disabled and is not restored after restarting, because agent processes and tasks are not restored either. Send or copy the **Automatic continuation** extension instructions to that agent.
+
+The agent reports its own task state with its `HERSHELL_SHELL_TOKEN`:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:HERSHELL_SHELL_TOKEN" }
+$body = @{ state = 'working' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$env:HERSHELL_API_URL/task" -Headers $headers -ContentType 'application/json' -Body $body
+```
+
+Use `working` while doing work or waiting for tools/other agents, `waiting` only immediately before ending an unfinished turn, `complete` when the requested work is finished, and `blocked` when approval, an answer, or other user action is required. `GET /task` returns this shell's state and toggle. The shared API token cannot report task state.
+
+After a `waiting` report, hershell requires at least 10 seconds without output, an empty Codex `›` or Claude `❯` prompt at the cursor, and no detected busy/approval state. It then submits one continuation message through the existing paste/Enter path. Each further continuation needs a fresh `waiting` report. Completion, user typing, a shell prompt, approval detection, disabling, or closing the shell cancels the pending wait. Delivery failure turns continuation off and displays an error badge; it is not retried automatically.
+
+This is cooperative automation, not a reliable detector for every CLI version or customized prompt. Silence alone never triggers it. Agents must report their state, unsupported prompts do not trigger it, and CLI permissions remain in force.
+
 ## Agent messaging
 
 Agents request delivery to another terminal through a local HTTP API. Recipients use **folder names**, not sidebar positions:
@@ -89,7 +109,7 @@ Shells launched by hershell receive these environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `HERSHELL_API_URL` | Local HTTP API address |
-| `HERSHELL_SHELL_TOKEN` | This shell's credential; required for self-identification and Telegram replies |
+| `HERSHELL_SHELL_TOKEN` | This shell's credential; required for self-identification, task reports, and Telegram replies |
 | `HERSHELL_API_TOKEN` | Shared credential for general API endpoints |
 | `HERSHELL_SHELL_ID` | Initial folder name only; becomes stale after folder changes |
 

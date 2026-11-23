@@ -12,6 +12,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { isShellKey } from './layout';
 import { shellAddresses } from './shell-address';
 import { folderName } from './status';
+import { newAutoState, type AutoState, type TaskState } from './auto-continue';
+import { autoUsage, browserUsage, messageUsage, telegramUsage } from './extension-usage';
 
 // Output from a pty is batched and sent to the window at most once per FLUSH_MS.
 // Sending every tiny chunk separately is the main cause of IPC/render overhead.
@@ -53,6 +55,54 @@ function shellAddress(id: number): string {
   return index < 0 ? '종료된 셸' : shellAddresses(shells)[index].id;
 }
 const messages = new MessageDelivery((id, to, message) => send('agent:message', id, to, message), undefined, shellAddress);
+const autoStates = new Map<number, AutoState>();
+const autoRuns = new Map<number, AbortController>();
+function getAuto(id: number): AutoState { return autoStates.get(id) ?? newAutoState(); }
+function updateAuto(id: number, patch: Partial<AutoState>): AutoState {
+  const value = { ...getAuto(id), ...patch, version: getAuto(id).version + 1 };
+  autoStates.set(id, value); send('auto:state', id, value); return value;
+}
+function reportTask(id: number, state: TaskState) {
+  if (!sessions.has(id)) throw new Error('Shell exited');
+  autoRuns.get(id)?.abort();
+  return updateAuto(id, { state, error: '' });
+}
+ipcMain.handle('auto:set', (e, id: number, enabled: boolean) => {
+  trustedShellWindow(e);
+  if (!sessions.has(id) || typeof enabled !== 'boolean') throw new Error('Invalid shell');
+  autoRuns.get(id)?.abort();
+  // A fresh report is required after each toggle. Never resume an old task on restart.
+  return updateAuto(id, { enabled, state: 'complete', error: '' });
+});
+ipcMain.on('auto:cancel', (e, id: number, blocked: boolean) => {
+  if (e.sender !== win?.webContents || !sessions.has(id)) return;
+  reportTask(id, blocked === true ? 'blocked' : 'working');
+});
+ipcMain.handle('auto:continue', async (e, id: number, version: number) => {
+  trustedShellWindow(e);
+  const state = getAuto(id);
+  if (!sessions.has(id) || !state.enabled || state.state !== 'waiting' || state.version !== version) return;
+  const controller = new AbortController();
+  autoRuns.get(id)?.abort(); autoRuns.set(id, controller);
+  updateAuto(id, { state: 'working' }); // Consume the report before any asynchronous delivery.
+  try { await messages.deliver(-1, id, '계속해. 남은 일 끝내라. 완료면 /task에 complete 보고해라. 승인·사용자 답 필요하면 blocked 보고하고 기다려라.', controller.signal); }
+  catch { if (!controller.signal.aborted && sessions.has(id)) updateAuto(id, { enabled: false, error: '자동 계속 전달 실패. 다시 켜라.' }); }
+  finally { if (autoRuns.get(id) === controller) autoRuns.delete(id); }
+});
+ipcMain.handle('extension:send', async (e, kind: string, target: number | 'all') => {
+  trustedShellWindow(e);
+  if (!agentApi || !['message', 'browser', 'telegram', 'auto'].includes(kind)) throw new Error('Invalid extension');
+  const recipients = [...sessions].filter(([id, s]) => s.ready && (target === 'all' || target === id));
+  if (!recipients.length) throw new Error('실행 중인 셸 없다.');
+  const info = { url: agentApi.url, token: agentApi.token };
+  const results = await Promise.allSettled(recipients.map(([id]) => {
+    const usage = kind === 'message' ? messageUsage(info, shellAddress(id)) : kind === 'browser' ? browserUsage(info, `shell-${id}`)
+      : kind === 'telegram' ? telegramUsage(info) : autoUsage(info);
+    reportTask(id, 'working');
+    return messages.deliver(-1, id, usage);
+  }));
+  return { sent: results.filter(r => r.status === 'fulfilled').length, failed: results.filter(r => r.status === 'rejected').length };
+});
 // Separate paste and Enter so CLI paste handling does not swallow the submit key.
 // Main-process timers also work when the recipient terminal/window is hidden.
 ipcMain.handle('agent:submit', async (e, id: number, requestId: number, length: number) => {
@@ -173,6 +223,7 @@ ipcMain.handle('pty:create', (_e, cols: number, rows: number, cwd?: string, save
     flush(id);
     forgetRepresentative(id);
     sessions.delete(id);
+    autoRuns.get(id)?.abort(); autoRuns.delete(id); autoStates.delete(id);
     telegram?.shellClosed(id);
     send('pty:exit', id, exitCode);
   });
@@ -254,7 +305,7 @@ if (!app.requestSingleInstanceLock()) {
     const testBase = process.env.HERSHELL_USER_DATA ? process.env.HERSHELL_TELEGRAM_TEST_URL : undefined;
     const base = testBase && /^http:\/\/127\.0\.0\.1:\d+$/.test(testBase) ? testBase : undefined;
     telegram = new TelegramBridge({ base, hasShell: id => sessions.has(id),
-      deliver: (id, text, signal) => messages.deliver(0, id, text, signal), changed: status => send('telegram:status', status) });
+      deliver: (id, text, signal) => { reportTask(id, 'working'); return messages.deliver(0, id, text, signal); }, changed: status => send('telegram:status', status) });
     telegramSettings = new TelegramSettings(path.join(app.getPath('userData'), 'telegram.enc'), envFile);
     representativeKey = telegramSettings.loadRepresentative();
     try {
@@ -263,8 +314,9 @@ if (!app.requestSingleInstanceLock()) {
       else if (!telegramSettings.hasSavedChoice() && !process.env.HERSHELL_USER_DATA && existsSync(envFile)) telegram.configure(await telegramSettings.importFile());
     } catch { telegram.setError('텔레그램 설정을 불러오지 못했습니다. 추가기능에서 설정을 확인하세요.'); }
     try {
-      agentApi = await startAgentApi(listShells, (from, to, message) => messages.deliver(from, to, message), () => browsers,
-        { bridge: () => telegram, shellForToken: token => [...sessions].find(([, s]) => s.apiToken === token)?.[0] });
+      agentApi = await startAgentApi(listShells, (from, to, message) => { reportTask(to, 'working'); return messages.deliver(from, to, message); }, () => browsers,
+        { bridge: () => telegram, shellForToken: token => [...sessions].find(([, s]) => s.apiToken === token)?.[0] },
+        { get: getAuto, report: reportTask });
       const testIdle = process.env.HERSHELL_USER_DATA ? Number(process.env.HERSHELL_BROWSER_IDLE_MS) : NaN;
       browsers = new BrowserManager(() => ({ url: agentApi!.url, token: agentApi!.token }), Number.isFinite(testIdle) && testIdle >= 1000 ? testIdle : undefined);
     }

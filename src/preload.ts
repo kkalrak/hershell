@@ -1,7 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { TelegramStatus, TelegramConfig } from './telegram';
+import type { AutoState } from './auto-continue';
 
 const api = {
+  autoSet: (id: number, enabled: boolean): Promise<AutoState> => ipcRenderer.invoke('auto:set', id, enabled),
+  autoCancel: (id: number, blocked = false) => ipcRenderer.send('auto:cancel', id, blocked),
+  autoContinue: (id: number, version: number): Promise<void> => ipcRenderer.invoke('auto:continue', id, version),
+  onAutoState: (cb: (id: number, state: AutoState) => void) => ipcRenderer.on('auto:state', (_e, id, state) => cb(id, state)),
+  sendUsage: (kind: string, target: number | 'all'): Promise<{ sent: number; failed: number }> => ipcRenderer.invoke('extension:send', kind, target),
   create: (cols: number, rows: number, cwd?: string, key?: string): Promise<number> =>
     ipcRenderer.invoke('pty:create', cols, rows, cwd, key),
   ready: (id: number) => ipcRenderer.send('pty:ready', id),

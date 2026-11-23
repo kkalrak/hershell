@@ -47,7 +47,7 @@ export class MessageDelivery {
       const timer = setTimeout(() => finish(false), this.timeoutMs);
       this.pending.set(id, finish);
       signal?.addEventListener('abort', onAbort, { once: true });
-      const sender = from === 0 ? '텔레그램' : this.shellName(from);
+      const sender = from === -1 ? '허셀' : from === 0 ? '텔레그램' : this.shellName(from);
       try { this.send(id, to, `[hershell ${sender} → ${this.shellName(to)}]\n${CONVERSATION_RULE}\n${message}`); }
       catch { finish(false); }
     });

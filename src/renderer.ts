@@ -8,6 +8,7 @@ import './styles.css';
 import type { PtyApi } from './preload';
 import { compareItems, detect, folderName, STATUS_MS, TAIL_LINES, type Status } from './status';
 import { loadLayout, saveLayout as storeLayout } from './layout';
+import { AUTO_QUIET_MS, newAutoState, readyToContinue, type AutoState } from './auto-continue';
 
 declare global {
   interface Window { pty: PtyApi }
@@ -36,6 +37,9 @@ interface Item {
   status: Status;
   lastOutput: number;
   exited: boolean;
+  auto: AutoState;
+  autoSince: number;
+  autoPending: boolean;
 }
 
 const items = new Map<number, Item>();
@@ -45,6 +49,35 @@ let restoring = false;
 const listEl = document.getElementById('list') as HTMLUListElement;
 const termsEl = document.getElementById('terms') as HTMLElement;
 const telegramUI = initTelegram(api, () => active?.term.focus());
+let autoTarget: Item | null = null;
+const autoToggle = document.getElementById('auto-toggle') as HTMLButtonElement;
+function showAuto(it: Item) {
+  let badge = it.li.querySelector<HTMLSpanElement>('.auto-badge');
+  if ((it.auto.enabled || it.auto.error) && !it.exited) {
+    if (!badge) { badge = document.createElement('span'); badge.className = 'auto-badge'; it.title.after(badge); }
+    badge.textContent = it.auto.error ? '!' : '↻'; badge.title = it.auto.error || `자동 계속 켜짐 · ${it.auto.state}`;
+  } else badge?.remove();
+}
+api.onAutoState((id, state) => { const it = items.get(id); if (it) { it.auto = state; it.autoSince = Date.now(); showAuto(it); } });
+listEl.addEventListener('contextmenu', e => {
+  const li = (e.target as HTMLElement).closest<HTMLLIElement>('li[data-shell-id]');
+  autoTarget = li ? items.get(Number(li.dataset.shellId)) ?? null : null;
+  autoToggle.disabled = !autoTarget || autoTarget.exited;
+  autoToggle.textContent = autoTarget?.auto.enabled ? '자동 계속 끄기' : '자동 계속 켜기';
+});
+autoToggle.addEventListener('click', async () => {
+  document.getElementById('shell-menu')!.hidden = true;
+  const it = autoTarget;
+  if (!it || it.exited) return;
+  try { it.auto = await api.autoSet(it.id, !it.auto.enabled); showAuto(it); }
+  catch (e) { console.error('자동 계속 설정 실패', e); }
+  active?.term.focus();
+});
+function cancelWaiting(it: Item, user = false) {
+  if (it.auto.state !== 'waiting' && !(user && it.autoPending)) return;
+  it.autoPending = false;
+  it.auto = { ...it.auto, state: 'working' }; api.autoCancel(it.id); showAuto(it);
+}
 
 // ---------- helpers ----------
 function tailLines(term: Terminal, n: number): string[] {
@@ -55,6 +88,19 @@ function tailLines(term: Terminal, n: number): string[] {
     out.push(buf.getLine(y)?.translateToString(true) ?? '');
   }
   return out;
+}
+
+/** Ignore only dim placeholder cells to the right of an otherwise empty input. */
+function continuationLines(it: Item, lines: string[]): string[] {
+  const buf = it.term.buffer.active;
+  const line = buf.getLine(buf.baseY + buf.cursorY);
+  const prefix = line?.translateToString(true, 0, buf.cursorX) ?? '';
+  if (!line || !/^\s*[›❯]\s*$/.test(prefix)) return lines;
+  for (let x = buf.cursorX; x < line.length; x++) {
+    const cell = line.getCell(x);
+    if (cell?.getChars().trim() && !cell.isDim()) return lines;
+  }
+  return [...lines.slice(0, -1), prefix];
 }
 
 /** Items in sidebar order. */
@@ -96,9 +142,19 @@ function setStatus(it: Item, s: Status) {
 setInterval(() => {
   const now = Date.now();
   for (const it of items.values()) {
-    const d = detect(tailLines(it.term, TAIL_LINES), now - it.lastOutput, it.exited);
+    const lines = tailLines(it.term, TAIL_LINES);
+    const d = detect(lines, now - it.lastOutput, it.exited);
     setStatus(it, d.status);
     if (d.cwd && d.cwd !== it.cwd) { setCwd(it, d.cwd); persist(); sortList(); }
+    if (it.auto.enabled && (it.auto.state === 'waiting' || it.auto.state === 'working') && (d.status === 'blocked' || d.status === 'idle')) {
+      it.auto = { ...it.auto, state: 'blocked' }; showAuto(it); api.autoCancel(it.id, true);
+    }
+    const quiet = now - Math.max(it.lastOutput, it.autoSince);
+    if (it.auto.enabled && it.auto.state === 'waiting' && quiet >= AUTO_QUIET_MS && readyToContinue(continuationLines(it, lines), quiet, d.status)) {
+      const version = it.auto.version;
+      it.auto = { ...it.auto, state: 'working' }; it.autoPending = true; showAuto(it);
+      void api.autoContinue(it.id, version).catch(() => { it.auto.enabled = false; showAuto(it); }).finally(() => { it.autoPending = false; });
+    }
   }
 }, STATUS_MS);
 
@@ -157,7 +213,7 @@ async function addShell(cwd = '', key: string = crypto.randomUUID()) {
     el.style.visibility = '';
   }
 
-  const it: Item = { id, key, term, fit, el, li, dot, title, cwd: '', status: 'idle', lastOutput: 0, exited: false };
+  const it: Item = { id, key, term, fit, el, li, dot, title, cwd: '', status: 'idle', lastOutput: 0, exited: false, auto: newAutoState(), autoSince: 0, autoPending: false };
   setCwd(it, cwd);
   items.set(id, it);
   li.dataset.shellId = String(id);
@@ -165,6 +221,7 @@ async function addShell(cwd = '', key: string = crypto.randomUUID()) {
   sortList();
 
   term.onData((d) => { if (!it.exited) api.write(id, d); });
+  term.onKey(() => cancelWaiting(it, true));
   term.onResize(({ cols, rows }) => api.resize(id, cols, rows));
   term.attachCustomKeyEventHandler((e) => handleKey(it, e));
   li.addEventListener('click', () => activate(it));
@@ -185,6 +242,7 @@ function handleKey(it: Item, e: KeyboardEvent): boolean {
     return false;
   }
   if (key === 'v') {
+    cancelWaiting(it, true);
     e.preventDefault();
     api.readClipboard().then((t) => { if (t) it.term.paste(t); });
     return false;
@@ -232,6 +290,7 @@ api.onMessage(async (requestId, to, message) => {
   const it = items.get(to);
   if (!it || it.exited) { api.delivered(requestId, false); return; }
   try {
+    cancelWaiting(it);
     it.term.paste(message);
     await api.submitMessage(to, requestId, message.length);
     if (items.get(to) !== it || it.exited) throw new Error('Shell exited');
@@ -251,6 +310,7 @@ api.onExit((id, code) => {
   const it = items.get(id);
   if (!it) return;
   it.exited = true;
+  showAuto(it);
   it.li.dataset.exited = 'true';
   it.term.write(`\r\n\x1b[90m[셸 종료: ${code}]\x1b[0m\r\n`);
 });

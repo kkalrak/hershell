@@ -30,6 +30,12 @@
       <span id="browser-copy-result" role="status"></span>
     </article>
     <article>
+      <h3>자동 계속</h3>
+      <p>셸 우클릭으로 켜고 끕니다. 미완료 보고 뒤 빈 입력 표시와 10초의 출력 멈춤을 확인하면 계속하라고 한 번 보냅니다. 완료·승인 대기에는 보내지 않습니다. 앱 재시작 시 꺼집니다.</p>
+      <button id="copy-auto-usage">사용법 복사</button>
+      <span id="auto-copy-result" role="status"></span>
+    </article>
+    <article>
       <h3>텔레그램</h3>
       <p>개인 채팅의 지시를 대표 셸 하나에 전달합니다. 왼쪽 셸을 우클릭해 대표를 지정하세요. 같은 봇을 쓰는 기존 릴레이는 먼저 종료하세요.</p>
       <p id="telegram-status" role="status">설정 확인 중</p>
@@ -44,6 +50,7 @@
     </article>
   </dialog>
   <div id="shell-menu" role="menu" hidden>
+    <button id="auto-toggle" role="menuitem">자동 계속 켜기</button>
     <button id="telegram-assign" role="menuitem">텔레그램 대표로 지정</button>
     <button id="telegram-unassign" role="menuitem">텔레그램 대표 해제</button>
   </div>

@@ -2,6 +2,30 @@ import { CONVERSATION_RULE, TELEGRAM_FORMAT_RULE } from './agent-instructions.ts
 
 export interface ApiConnection { url: string; token: string }
 
+export function autoUsage(info: ApiConnection): string {
+  return `hershell 자동 계속 사용법
+${CONVERSATION_RULE}
+사용자가 셸 우클릭 → 자동 계속 켜기 누르면 쓴다. 기본 꺼짐이다. 재실행하면 다시 켠다.
+API 주소: ${info.url}
+인증: Authorization: Bearer <HERSHELL_SHELL_TOKEN 환경 변수 값>
+GET /task : 내 자동 계속 상태 본다. 다른 셸 상태 못 바꾼다.
+POST /task : {"state":"working|waiting|complete|blocked"} 중 실제 값 하나 보낸다.
+새 일 시작하면 working 보고한다. 할 일 전부 끝나면 complete 보고한다.
+일 남았는데 이번 응답 끝내고 입력 기다릴 때만 waiting 보고한다. 보고 뒤 바로 응답 끝낸다.
+추론·도구·다른 에이전트 답 기다리는 중에는 working 유지한다. waiting 보내지 않는다.
+승인·질문·로그인·오류 해결에 사용자 필요하면 blocked 보고하고 기다린다.
+PowerShell 예시:
+$headers = @{ Authorization = "Bearer $env:HERSHELL_SHELL_TOKEN" }
+$body = @{ state = 'working' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$env:HERSHELL_API_URL/task" -Headers $headers -ContentType 'application/json' -Body $body
+state만 바꿔 같은 방법으로 보고한다. API 안 되면 사용자에게 알린다.
+미완료 waiting 보고 뒤 빈 Codex › / Claude ❯ 입력 표시와 출력 없는 10초가 확인되면 허셀이 계속해 한 번 보낸다.
+침묵만으로 안 보낸다. 승인·작업·완료 상태에는 안 보낸다. 다음 자동 계속에는 새 waiting 보고 필요하다.
+사용자가 입력하면 대기 취소한다. 감지 안 되는 프롬프트는 자동 계속 안 된다.
+허셀이 새 권한을 주지 않는다. 사용자 작업 범위와 CLI 승인 그대로 지킨다.
+`;
+}
+
 export function telegramUsage(info: ApiConnection): string {
   return `hershell 텔레그램 사용법
 ${CONVERSATION_RULE}
